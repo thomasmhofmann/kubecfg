@@ -13,11 +13,10 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-#VERSION ?= dev-$(shell date +%FT%T%z)
-VERSION ?= eip-2025-01-09
-#GOOS=linux
-GOOS=darwin
-GOARCH=amd64
+VERSION ?= eip-$(shell date +%FT%T%z)
+
+GOOS?=darwin
+GOARCH?=arm64
 
 GO ?= go
 GO_FLAGS ?= -mod=vendor
@@ -41,7 +40,7 @@ KUBECONFIG ?= $(HOME)/.kube/config
 all: kubecfg
 
 kubecfg:
-	export GOARCH=$(GOARCH); CGO_ENABLED=0 $(GO) build $(GO_FLAGS) $(GO_BUILDFLAGS) .
+	export GOARCH=$(GOARCH); GOOS=$(GOOS) CGO_ENABLED=0 $(GO) build $(GO_FLAGS) $(GO_BUILDFLAGS) .
 
 generate:
 	$(GO) generate -x $(GO_FLAGS) $(GO_PACKAGES)
