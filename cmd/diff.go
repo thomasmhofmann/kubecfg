@@ -27,7 +27,7 @@ const (
 )
 
 func init() {
-	diffCmd.PersistentFlags().String(flagDiffStrategy, "all", "Diff strategy, all or subset.")
+	diffCmd.PersistentFlags().String(flagDiffStrategy, "all", "Diff strategy, all, subset or last-applied")
 	diffCmd.PersistentFlags().Bool(flagOmitSecrets, false, "hide secret details when showing diff")
 	RootCmd.AddCommand(diffCmd)
 }
@@ -67,6 +67,6 @@ var diffCmd = &cobra.Command{
 			return err
 		}
 
-		return c.Run(objs, cmd.OutOrStdout())
+		return c.Run(cmd.Context(), objs, cmd.OutOrStdout())
 	},
 }

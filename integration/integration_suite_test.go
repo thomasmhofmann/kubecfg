@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -12,12 +13,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -51,11 +50,13 @@ func clusterConfigOrDie() *rest.Config {
 
 func createNsOrDie(c corev1.CoreV1Interface, ns string) string {
 	result, err := c.Namespaces().Create(
+		context.Background(),
 		&v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: ns,
 			},
-		})
+		},
+		metav1.CreateOptions{})
 	if err != nil {
 		panic(err.Error())
 	}
@@ -65,7 +66,7 @@ func createNsOrDie(c corev1.CoreV1Interface, ns string) string {
 }
 
 func deleteNsOrDie(c corev1.CoreV1Interface, ns string) {
-	err := c.Namespaces().Delete(ns, &metav1.DeleteOptions{})
+	err := c.Namespaces().Delete(context.Background(), ns, metav1.DeleteOptions{})
 	if err != nil {
 		panic(err.Error())
 	}
@@ -97,10 +98,7 @@ func runKubecfgWithOutput(flags []string, input []runtime.Object, output io.Writ
 	if err != nil {
 		return err
 	}
-	enc := unstructured.JSONFallbackEncoder{serializer.DirectCodecFactory{CodecFactory: scheme.Codecs}.LegacyCodec(
-		v1.SchemeGroupVersion,
-		appsv1.SchemeGroupVersion,
-	)}
+	enc := unstructured.NewJSONFallbackEncoder(scheme.Codecs.LegacyCodec(scheme.Scheme.PrioritizedVersionsAllGroups()...))
 
 	if err := encodeTo(f, enc, input); err != nil {
 		return err

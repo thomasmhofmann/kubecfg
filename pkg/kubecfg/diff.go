@@ -17,6 +17,7 @@ package kubecfg
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -53,7 +54,7 @@ type DiffCmd struct {
 	DiffStrategy string
 }
 
-func (c DiffCmd) Run(apiObjects []*unstructured.Unstructured, out io.Writer) error {
+func (c DiffCmd) Run(ctx context.Context, apiObjects []*unstructured.Unstructured, out io.Writer) error {
 	sort.Sort(utils.AlphabeticalOrder(apiObjects))
 
 	dmp := diffmatchpatch.New()
@@ -71,7 +72,7 @@ func (c DiffCmd) Run(apiObjects []*unstructured.Unstructured, out io.Writer) err
 			return fmt.Errorf("Error fetching one of the %s: it does not have a name set", utils.ResourceNameFor(c.Mapper, obj))
 		}
 
-		liveObj, err := client.Get(obj.GetName(), metav1.GetOptions{})
+		liveObj, err := client.Get(ctx, obj.GetName(), metav1.GetOptions{})
 		if err != nil && errors.IsNotFound(err) {
 			log.Debugf("%s doesn't exist on the server", desc)
 			liveObj = nil
@@ -87,12 +88,11 @@ func (c DiffCmd) Run(apiObjects []*unstructured.Unstructured, out io.Writer) err
 			continue
 		}
 
-		liveObjObject := liveObj.Object
-		if c.DiffStrategy == "subset" {
-			liveObjObject = removeMapFields(obj.Object, liveObjObject)
+		liveObjMap, err := c.getLiveObjObject(obj, liveObj)
+		if err != nil {
+			return err
 		}
-
-		liveObjText, _ := json.MarshalIndent(liveObjObject, "", "  ")
+		liveObjText, _ := json.MarshalIndent(liveObjMap, "", "  ")
 		objText, _ := json.MarshalIndent(obj.Object, "", "  ")
 
 		liveObjTextLines, objTextLines, lines := dmp.DiffLinesToChars(string(liveObjText), string(objText))
@@ -116,6 +116,22 @@ func (c DiffCmd) Run(apiObjects []*unstructured.Unstructured, out io.Writer) err
 		return ErrDiffFound
 	}
 	return nil
+}
+
+func (c DiffCmd) getLiveObjObject(obj *unstructured.Unstructured, liveObj *unstructured.Unstructured) (map[string]interface{}, error) {
+	var liveObjObject map[string]interface{}
+	if c.DiffStrategy == "subset" {
+		liveObjObject = removeMapFields(obj.Object, liveObj.Object)
+	} else if c.DiffStrategy == "last-applied" {
+		var err error
+		liveObjObject, err = origObject(liveObj)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		liveObjObject = liveObj.Object
+	}
+	return liveObjObject, nil
 }
 
 // Formats the supplied Diff as a unified-diff-like text with infinite context and optionally colorizes it.
